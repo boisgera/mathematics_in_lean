@@ -11,7 +11,9 @@
 - [ ] Iterate to improve (explicit/readable) the T2K implementation
       (a lot of black-box / low-level / redundancy / hammering so far)
 
-- [ ] "(type)classify" this concept?
+- [x] "(type)classify" this concept? (works smoothly! After that,
+      the will infer what "x ν A" means when X has a topological
+      structure)
 
 - [x] notation ν for being in closure
 
@@ -23,9 +25,32 @@
 
 - [ ] show equivalence between classical def and k def of cont
 
-- [ ] Solve bug: I never use explicitlu the property that an union of open set is open!
+- [X] Explain "bug": I never use explicitlu the property that an
+      union of open set is open! UPDATE: not a bug, a feature!
 
- -/
+- [ ] Prove that ¬(x ν A) <-> x ∈ ⋃₀ {U : Set X | IsOpen U ∧ U ⊆ Aᶜ}
+
+-/
+
+/-
+Note: I have defined the the Kuratowski nearness operator using:
+
+   x ν A <-> ∀ U : Set X, IsOpen U -> x ∈ U -> (U ∩ A) ≠ ∅
+
+I could have used instead the characterization that the closure of A is the
+smallest closed set that contains A. But not that this 2nd charac only makes
+sense if an arbitrary intersection of a family of closed sets is closed.
+
+OTOH the first charac does not force me to use the topology axiom that a union
+of open set is an open set. It yields the second charac if we can use this
+axiom. So what's interesting with the first charac is that we could use it
+to get a KS even if this property does not hold. The round trip would not
+"work" but instead associate to the initial collection "some" associated
+topology.
+
+Q: Can we be working with a topological BASIS here? (Need to check the defs)
+
+-/
 
 import Mathlib.Data.Set.Basic
 import Mathlib.Topology.Basic
@@ -33,7 +58,7 @@ import Mathlib.Topology.Defs.Basic
 
 open TopologicalSpace
 
-structure KuratowskiSpace (X : Type u) where
+class KuratowskiSpace (X : Type u) where
   close : X -> Set X -> Prop
   not_close_empty (x : X) : ¬close x ∅
   mem_close {x : X} {A : Set X} : x ∈ A -> close x A
@@ -43,7 +68,6 @@ structure KuratowskiSpace (X : Type u) where
 notation x " ν " A => KuratowskiSpace.close x A
 
 open Set
--- open Classical
 
 -- struggling here to relate something being non-empty and putting my hand on
 -- one of the element.
@@ -62,6 +86,8 @@ open Set
 -- to use the Nonempty version (it is "stronger"). Or, if we
 -- dont want to mess everyting right now, we provide an external lemma.
 -- (roughly speaking the lemma below)
+
+--------------------------------------------------------------------------------
 
 theorem nonempty_of_ne_empty {A : Set α} : A ≠ ∅ -> ∃ x, x ∈ A := by
   intro A_not_empty -- A ≠ ∅
@@ -90,7 +116,12 @@ lemma minimal {A : Set α} : ¬(∀ (x : α), x ∉ A) -> ∃ x, x ∈ A := by
 
 #print minimal -- Yes, it refers to some Init.Classical._auxLemma.3 stuff.
 
-def T2K (X : Type u) [TopologicalSpace X] : KuratowskiSpace X :=
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+
+instance {X : Type*} [TopologicalSpace X] : KuratowskiSpace X :=
   {
     close := fun x A => ∀ U : Set X, IsOpen U -> x ∈ U -> (U ∩ A) ≠ ∅,
 
@@ -224,3 +255,46 @@ def T2K (X : Type u) [TopologicalSpace X] : KuratowskiSpace X :=
       assumption
       ,
   }
+
+lemma not_close_iff_in_union {X : Type*} [TopologicalSpace X] {A : Set X} {x : X}:
+  ¬(x ν A) <-> x ∈ ⋃₀ {U : Set X | IsOpen U ∧ U ⊆ Aᶜ} := by
+  constructor
+  . intro not_x_in_A
+    have h₁ : ¬ ∀ U : Set X, IsOpen U -> x ∈ U -> (U ∩ A) ≠ ∅ := by
+      exact not_x_in_A
+    have h₂ :  ∃ U : Set X, IsOpen U ∧ x ∈ U ∧ (U ∩ A) = ∅ := by
+      simp at h₁
+      exact h₁
+    simp
+    have h₃ : ∃ U, (IsOpen U ∧ U ⊆ Aᶜ) ∧ x ∈ U := by
+      let ⟨U, hU⟩ := h₂
+      have : U ⊆ Aᶜ := by
+        have h: U ∩ A = ∅ := hU.2.2
+        intro x xinU xinA
+        have xinUA : x ∈ U ∩ A := by
+          simp
+          exact (And.intro xinU xinA)
+        rw[h] at xinUA
+        simp at xinUA
+      exact Exists.intro U ⟨⟨hU.1, this⟩, hU.2.1⟩
+    assumption
+  . intro xinUU
+    simp at xinUU
+    let ⟨U, hUU⟩ := xinUU
+    intro xnuA -- ∀ U : Set X, IsOpen U -> x ∈ U -> (U ∩ A) ≠ ∅
+    have hUA := xnuA U hUU.1.1 hUU.2
+    have hUAc := hUU.1.2
+    let ⟨x, ⟨xU, xA⟩⟩ := nonempty_of_ne_empty hUA
+    have z := hUAc xU
+    exact absurd xA z
+
+
+
+lemma close_inter_closed_sets {X : Type*} [TopologicalSpace X] {A : Set X} {x : X}:
+  (x ν A) <-> x ∈ ⋂₀ {C : Set X | IsClosed C ∧ A ⊆ C} := by
+  apply not_iff_not.mp -- goal: (¬x ν A) ↔ x ∉ ⋂₀ {C | IsClosed C ∧ A ⊆ C}
+  have : (⋂₀ {C | IsClosed C ∧ A ⊆ C})ᶜ = ⋃₀ {O | IsOpen O ∧ O ∩ A ≠ ∅} := by
+    ext x
+    constructor
+    . admit
+    . admit
