@@ -30,6 +30,10 @@
 
 - [ ] Prove that ¬(x ν A) <-> x ∈ ⋃₀ {U : Set X | IsOpen U ∧ U ⊆ Aᶜ}
 
+- [ ] class for topology base (and how it yields KS and TS)
+
+- [ ] define topology base space (as TBS) (a class), relate to KS
+
 -/
 
 /-
@@ -56,7 +60,133 @@ import Mathlib.Data.Set.Basic
 import Mathlib.Topology.Basic
 import Mathlib.Topology.Defs.Basic
 
+import Init.Classical
+open Classical
+
 open TopologicalSpace
+
+def exists_sUnion_by {X : Type u} (S : Set (Set X)) (A : Set X) : Prop :=
+  ∃ T, T ⊆ S ∧ ⋃₀ T = A
+
+lemma sUnion_from_sUnion {X : Type u} (F G : Set (Set X)) :
+ (∀ f, f ∈ F -> exists_sUnion_by G f) -> exists_sUnion_by G (⋃₀ F)
+ := by
+ intro sUnion_by_G
+ let Gf (f : Set X) (f_in_F : f ∈ F) := choose (sUnion_by_G f f_in_F)
+ let GUf := ⋃₀ { Gf f f_in_F| (f : Set X) (f_in_F : f ∈ F)}
+
+ have {f : Set X} {f_in_F : f ∈ F} {x : X} :
+  x ∈ f <-> ∃ G ∈ (Gf f f_in_F), x ∈ G := by
+  let p := (choose_spec (sUnion_by_G f f_in_F)).right
+  apply Iff.intro
+  . intro x_in_f
+    have : (x ∈ f) = (x ∈ ⋃₀ choose (sUnion_by_G f f_in_F)) := by
+      exact congrArg (x ∈ ·) p.symm
+    rw [this] at x_in_f
+    rw [Set.mem_sUnion] at x_in_f
+    assumption
+  . intro h
+    let ⟨g, h₂, x_in_g⟩ := h
+    have : g ⊆ f := by
+      -- g is an element of a cover of f by definition (and choice)
+      -- TODO: use that!
+      admit
+    exact this x_in_g
+
+
+lemma sUnion_from_sUnion' {X : Type u} (F G : Set (Set X)) :
+ (∀ f, f ∈ F -> exists_sUnion_by G f) -> exists_sUnion_by G (⋃₀ F)
+ := by
+  intro forall_f_in_F_exists_sUnion_by_G_f
+  let C := ⋃₀ {
+    choose (forall_f_in_F_exists_sUnion_by_G_f f f_in_F)
+    |
+    (f : Set X) (f_in_F : f ∈ F )
+  }
+  apply Exists.intro C
+
+  have h₁ : C ⊆ G := by
+    intro T T_in_C
+    rw [Set.mem_sUnion] at T_in_C
+    simp at T_in_C
+    let ⟨a, ⟨b, c, d⟩, e⟩ := T_in_C
+    let h := choose_spec (forall_f_in_F_exists_sUnion_by_G_f b c)
+    rw [d] at h
+    have a_subset_G := h.left
+    exact Set.mem_of_subset_of_mem a_subset_G e
+
+  have h₂ : ⋃₀ C = ⋃₀ F := by
+
+    ext x
+    apply Iff.intro
+    . intro x_in_sUnion_C
+
+      admit
+    . admit
+
+
+  exact ⟨h₁, h₂⟩
+
+
+structure TopologicalBasisSpace (X : Type u) where
+  basic_open_sets : Set (Set X)
+  isOpen_univ : exists_sUnion_by basic_open_sets Set.univ
+  isOpen_inter {A B : Set X} :
+    A ∈ basic_open_sets ∧ B ∈ basic_open_sets ->
+    exists_sUnion_by basicOpenSets (A ∩ B)
+
+def TBS2TB {X : Type u} (base: TopologicalBasisSpace X) : TopologicalSpace X :=
+  {
+    IsOpen :=
+      fun U => exists_sUnion_by base.basic_open_sets U,
+
+    isOpen_univ :=
+      base.isOpen_univ,
+
+    isOpen_inter := by
+      dsimp only
+      intro S T cover_S cover_T
+      let ⟨F, F_basic_open, F_cover_union_s⟩ := cover_S
+      let ⟨G, G_basic_open, G_covers_T⟩ := cover_T
+      -- H is our cover of S ∩ T by basic open sets. Nope! We need to
+      -- consider the elements of the cover of A ∩ B. This is harder :(
+      -- and we need choice?
+      -- have a look at <https://leanprover.github.io/theorem_proving_in_lean/axioms_and_computation.html>
+      let H := { C : Set X | ∃ A ∈ F, ∃ B ∈ G, C = A ∩ B }
+      -- TODO: 1. sets in H are basic open sets
+      have H_basic_open : H ⊆ base.basic_open_sets := by -- Arf fuck, this is wrong
+        intro h h_in_H
+        let ⟨A, A_in_F, B, B_in_G, h_eq_A_cap_B⟩ := h_in_H
+        admit
+      -- TODO: 2. H covers S ∩ T
+      have H_is_cover : ⋃₀ H = S ∩ T := by admit
+      exact ⟨H, H_basic_open, H_is_cover⟩
+
+    isOpen_sUnion := by
+      dsimp only
+
+      intro s cover_map -- ∀ t ∈ s, exists_sUnion_by base.basic_open_sets t
+      -- goal: ⊢ exists_sUnion_by base.basic_open_sets (⋃₀ s)
+
+      let cover_union_s : Set (Set X) := ⋃₀ {
+        choose (cover_map t t_in_s) | (t : Set X) (t_in_s : t ∈ s)
+      }
+      apply Exists.intro cover_union_s
+      have h₁ : cover_union_s ⊆ base.basic_open_sets := by
+        intro c c_in_cover -- c ∈ cover_union_s
+        -- decompose/interpret the ⋃₀
+        let ⟨subcover, p, c_in_subcover⟩ := Set.mem_sUnion.mp c_in_cover
+        dsimp at p -- x ∈ {y | p y} pattern
+        let ⟨t, t_in_s, choice⟩ := p
+        let ⟨h, _⟩ := choose_spec (cover_map t t_in_s)
+        rw[choice] at h
+        exact h c_in_subcover
+      have h₂ : ⋃₀ cover_union_s = ⋃₀ s := by
+          admit
+
+      exact ⟨h₁, h₂⟩
+
+  }
 
 class KuratowskiSpace (X : Type u) where
   close : X -> Set X -> Prop
