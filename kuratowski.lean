@@ -68,65 +68,44 @@ open TopologicalSpace
 def exists_sUnion_by {X : Type u} (S : Set (Set X)) (A : Set X) : Prop :=
   ∃ T, T ⊆ S ∧ ⋃₀ T = A
 
+lemma subset_of_mem_and_sUnion {X : Type u} {A B: Set X} {C : Set (Set X)}:
+  A ∈ C ∧ ⋃₀ C = B -> A ⊆ B := by
+  rintro ⟨A_in_C, sUnion_C_eq_B⟩
+  intro x x_in_A
+  have : x ∈ ⋃₀ C := Set.mem_sUnion_of_mem x_in_A A_in_C
+  rw [sUnion_C_eq_B] at this
+  exact this
+
 lemma sUnion_from_sUnion {X : Type u} (F G : Set (Set X)) :
  (∀ f, f ∈ F -> exists_sUnion_by G f) -> exists_sUnion_by G (⋃₀ F)
  := by
- intro sUnion_by_G
- let Gf (f : Set X) (f_in_F : f ∈ F) := choose (sUnion_by_G f f_in_F)
- let GUf := ⋃₀ { Gf f f_in_F| (f : Set X) (f_in_F : f ∈ F)}
+  intro sUnion_by_G
+  let Gf (f : Set X) (f_in_F : f ∈ F) := choose (sUnion_by_G f f_in_F)
+  let GUf := ⋃₀ { Gf f f_in_F| (f : Set X) (f_in_F : f ∈ F)}
 
- have {f : Set X} {f_in_F : f ∈ F} {x : X} :
-  x ∈ f <-> ∃ G ∈ (Gf f f_in_F), x ∈ G := by
-  let p := (choose_spec (sUnion_by_G f f_in_F)).right
-  apply Iff.intro
-  . intro x_in_f
-    have : (x ∈ f) = (x ∈ ⋃₀ choose (sUnion_by_G f f_in_F)) := by
-      exact congrArg (x ∈ ·) p.symm
-    rw [this] at x_in_f
-    rw [Set.mem_sUnion] at x_in_f
-    assumption
-  . intro h
-    let ⟨g, h₂, x_in_g⟩ := h
-    have : g ⊆ f := by
-      -- g is an element of a cover of f by definition (and choice)
-      -- TODO: use that!
-      admit
-    exact this x_in_g
-
-
-lemma sUnion_from_sUnion' {X : Type u} (F G : Set (Set X)) :
- (∀ f, f ∈ F -> exists_sUnion_by G f) -> exists_sUnion_by G (⋃₀ F)
- := by
-  intro forall_f_in_F_exists_sUnion_by_G_f
-  let C := ⋃₀ {
-    choose (forall_f_in_F_exists_sUnion_by_G_f f f_in_F)
-    |
-    (f : Set X) (f_in_F : f ∈ F )
-  }
-  apply Exists.intro C
-
-  have h₁ : C ⊆ G := by
-    intro T T_in_C
-    rw [Set.mem_sUnion] at T_in_C
-    simp at T_in_C
-    let ⟨a, ⟨b, c, d⟩, e⟩ := T_in_C
-    let h := choose_spec (forall_f_in_F_exists_sUnion_by_G_f b c)
-    rw [d] at h
-    have a_subset_G := h.left
-    exact Set.mem_of_subset_of_mem a_subset_G e
-
-  have h₂ : ⋃₀ C = ⋃₀ F := by
-
-    ext x
+  have {f : Set X} {f_in_F : f ∈ F} {x : X} :
+    x ∈ f <-> ∃ G ∈ (Gf f f_in_F), x ∈ G := by
+    have p : ⋃₀ choose (sUnion_by_G f f_in_F) = f :=
+      (choose_spec (sUnion_by_G f f_in_F)).right
     apply Iff.intro
-    . intro x_in_sUnion_C
+    . intro x_in_f
+      have : (x ∈ f) = (x ∈ ⋃₀ choose (sUnion_by_G f f_in_F)) := by
+        exact congrArg (x ∈ ·) p.symm
+      rw [this] at x_in_f
+      rw [Set.mem_sUnion] at x_in_f
+      assumption
+    . intro h
+      let ⟨g, g_in_Gf, x_in_g⟩ := h
+      have : g ⊆ f := by
+        -- g is an element of a cover of f by definition (and choice)
+        simp [Gf] at p
+        simp [Gf] at g_in_Gf
+        exact (subset_of_mem_and_sUnion (And.intro g_in_Gf p))
+      exact this x_in_g
 
-      admit
-    . admit
+  -- TODO: still a lot of work...
 
-
-  exact ⟨h₁, h₂⟩
-
+  admit
 
 structure TopologicalBasisSpace (X : Type u) where
   basic_open_sets : Set (Set X)
